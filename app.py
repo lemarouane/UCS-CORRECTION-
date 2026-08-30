@@ -245,6 +245,7 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     height: 90px;
 }
 .logo-frame img {
+    margin-top: -5em;
     max-height: 180px;
     max-width: 200%;
     width: auto;
