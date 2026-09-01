@@ -17,15 +17,17 @@ from docx.shared import Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 from config import MODEL_VERSION
+from ucs_exporter import DEFAULT_LENGTH_COLUMN
 
 
-def generate_adjustment_letter(results_df, project_name=""):
+def generate_adjustment_letter(results_df, project_name="", length_column=DEFAULT_LENGTH_COLUMN):
     """
     Genere une lettre/demande d'ajustement au format .docx a partir du
     tableau de resultats.
 
     :param results_df: DataFrame produit par processor.process_ucs_file
     :param project_name: nom du projet/faisceau a afficher en en-tete (optionnel)
+    :param length_column: colonne de longueur retenue (arrondie ou delta continu)
     :return: bytes du document .docx
     """
     modified_df = results_df[
@@ -55,13 +57,12 @@ def generate_adjustment_letter(results_df, project_name=""):
     count_paragraph.add_run(str(len(modified_df)))
 
     document.add_paragraph(
-        "Le tableau ci-dessous liste les Wire/Tube dont la longueur doit "
-        "etre ajustee selon l'estimation automatique, arrondie au pas "
-        "metier de 5 mm. Cette estimation est une aide au calcul et ne "
-        "constitue pas une garantie universelle."
+        "Le tableau ci-dessous liste les Wires dont la longueur doit "
+        "etre ajustee selon l'estimation automatique. Cette estimation est "
+        "une aide au calcul et ne constitue pas une garantie universelle."
     )
 
-    _add_modifications_table(document, modified_df)
+    _add_modifications_table(document, modified_df, length_column)
 
     document.add_paragraph()
     signature_paragraph = document.add_paragraph()
@@ -80,8 +81,8 @@ def _set_base_style(document):
     style.font.size = Pt(11)
 
 
-def _add_modifications_table(document, modified_df):
-    headers = ["Feuille", "Wire/Tube Name", "Old Length (mm)", "Delta arrondi (mm)", "New Length (mm)"]
+def _add_modifications_table(document, modified_df, length_column):
+    headers = ["Feuille", "Wire Name", "Old Length (mm)", "Delta arrondi (mm)", length_column]
 
     table = document.add_table(rows=1, cols=len(headers))
     table.style = "Light Grid Accent 1"
@@ -96,10 +97,10 @@ def _add_modifications_table(document, modified_df):
     for _, record in modified_df.iterrows():
         row_cells = table.add_row().cells
         row_cells[0].text = str(record["Feuille"])
-        row_cells[1].text = str(record["Wire/Tube Name"])
+        row_cells[1].text = str(record["Wire Name"])
         row_cells[2].text = str(record["Old Length (mm)"])
         row_cells[3].text = str(record["Delta arrondi (mm)"])
-        row_cells[4].text = str(record["New Length (mm)"])
+        row_cells[4].text = str(record[length_column])
 
     if len(modified_df) == 0:
         no_row = table.add_row().cells

@@ -43,19 +43,19 @@ def validate_length(raw_length):
 
 def validate_name(raw_name):
     """
-    Verifie la presence du Wire/Tube Name.
+    Verifie la presence du Wire Name.
     Retourne (nom_normalise: str, avertissements: list[str]).
     """
     warnings = []
     if raw_name is None or str(raw_name).strip() == "":
-        warnings.append("Wire/Tube Name manquant.")
+        warnings.append("Wire Name manquant.")
         return "", warnings
     return str(raw_name).strip(), warnings
 
 
 def detect_duplicate_names(names):
     """
-    Detecte les doublons de Wire/Tube Name sans suppression silencieuse
+    Detecte les doublons de Wire Name sans suppression silencieuse
     (cahier, section 12). Retourne un set des noms en doublon.
     """
     seen = set()
@@ -80,7 +80,7 @@ def build_row_status(length_errors, name_warnings, is_duplicate, calc_errors):
     messages.extend(calc_errors)
     messages.extend(name_warnings)
     if is_duplicate:
-        messages.append("Wire/Tube Name en doublon dans la feuille.")
+        messages.append("Wire Name en doublon dans la feuille.")
 
     if length_errors or calc_errors:
         return RowValidation(is_valid=False, status="ERREUR", messages=messages)

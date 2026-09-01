@@ -1,11 +1,14 @@
 """
 Lecture et normalisation d'un fichier UCS (.xlsx).
 
-Un UCS est un classeur Excel avec (au minimum) des feuilles "Wires" et/ou
-"Tubes" contenant une colonne de longueur ("Length") et une colonne de nom
+Un UCS est un classeur Excel avec (au minimum) une feuille "Wires"
+contenant une colonne de longueur ("Length") et une colonne de nom
 ("Wire Name" / "Wire name" / "Name"). L'en-tete n'est pas forcement sur la
 ligne 1 (certains exports ont une ligne de version en ligne 1, ex :
 "EngApp v3.1.0").
+
+Les Tubes sont volontairement hors perimetre (cf. config.SHEETS_TO_PROCESS) :
+seuls les Wires sont pris en compte par le calcul automatique.
 
 Ce module NE MODIFIE JAMAIS le fichier source : il ne fait que lire.
 """
@@ -36,7 +39,7 @@ class SheetLayout:
 class ParsedRow:
     sheet_name: str
     excel_row_index: int  # 1-based, position reelle dans le classeur (pour re-ecriture)
-    wire_tube_name: object
+    wire_name: object
     old_length_raw: object
 
 
@@ -143,7 +146,7 @@ def parse_ucs_file(file_path_or_buffer, sheets_to_process=None):
                 ParsedRow(
                     sheet_name=sheet_name,
                     excel_row_index=row_idx,
-                    wire_tube_name=name_cell.value,
+                    wire_name=name_cell.value,
                     old_length_raw=length_cell.value,
                 )
             )

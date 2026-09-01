@@ -29,8 +29,10 @@ MIN_VALID_LENGTH_MM = 0.000001  # doit etre strictement positif
 # obtenir aupres du metier). Laisse a None tant que non fourni.
 MAX_VALID_LENGTH_MM = None
 
-# Feuilles UCS a traiter (contiennent Wire/Tube Name + Length)
-SHEETS_TO_PROCESS = ["Wires", "Tubes"]
+# Feuilles UCS a traiter (contiennent Wire Name + Length).
+# NB : les Tubes sont volontairement exclus du perimetre de calcul -
+# seuls les Wires sont concernes par la correction automatique.
+SHEETS_TO_PROCESS = ["Wires"]
 
 # Mots-cles (en minuscule) pour la detection automatique des colonnes
 LENGTH_HEADER_KEYWORDS = ["length"]
@@ -47,8 +49,8 @@ GEMINI_MODEL = "gemini-flash-latest"
 
 PROJECT_TITLE = "Correction automatique des longueurs UCS"
 PROJECT_SUBTITLE = (
-    "Automatisation du calcul et de l'ajustement des longueurs de fils et "
-    "tubes (UCS) a partir d'un modele mathematique valide sur donnees reelles."
+    "Automatisation du calcul et de l'ajustement des longueurs de fils "
+    "(UCS) a partir d'un modele mathematique valide sur donnees reelles."
 )
 PROJECT_TYPE = "Projet de Fin d'Etudes (PFE)"
 PROJECT_AUTHOR = "Ouiame Yachou"

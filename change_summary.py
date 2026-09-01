@@ -25,7 +25,16 @@ def build_change_summary(results_df):
     modified["Delta abs (mm)"] = modified["Delta arrondi (mm)"].abs()
     changes_df = modified.sort_values("Delta abs (mm)", ascending=False).drop(columns=["Delta abs (mm)"])
     changes_df = changes_df[
-        ["Feuille", "Wire/Tube Name", "Old Length (mm)", "Delta arrondi (mm)", "New Length (mm)", "Statut"]
+        [
+            "Feuille",
+            "Wire Name",
+            "Old Length (mm)",
+            "Delta predit continu (mm)",
+            "Delta arrondi (mm)",
+            "New Length (mm)",
+            "New Length - delta continu (mm)",
+            "Statut",
+        ]
     ]
 
     stats = {
