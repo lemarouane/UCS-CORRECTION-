@@ -2,8 +2,6 @@
 
 **Projet de Fin d'Etudes (PFE)** — Automatisation du calcul et de l'ajustement des longueurs de fils et tubes (UCS) dans un dossier de cablage automobile, a partir d'un modele mathematique valide sur donnees reelles.
 
-> Realise par **Ouiame Yachou**
-
 ![Python](https://img.shields.io/badge/Python-3.10+-blue)
 ![Streamlit](https://img.shields.io/badge/Streamlit-App-red)
 ![License](https://img.shields.io/badge/statut-PFE-lightgrey)
