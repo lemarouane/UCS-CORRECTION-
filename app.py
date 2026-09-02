@@ -413,7 +413,7 @@ def _plotly_layout_defaults(fig, height, title=None, show_legend=True):
         font=dict(family="Inter, sans-serif", size=12, color="#334155"),
         showlegend=show_legend,
         legend=dict(orientation="h", yanchor="bottom", y=-0.22, xanchor="center", x=0.5, font=dict(size=11)),
-        title=dict(text=title, font=dict(size=13, color="#0f172a", family="Inter")) if title else None,
+        title=dict(text=title or "", font=dict(size=13, color="#0f172a", family="Inter")),  # <-- changed line
     )
     return fig
 
