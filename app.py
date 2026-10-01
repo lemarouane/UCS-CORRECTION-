@@ -1,7 +1,7 @@
 """
-Application Streamlit - Wire Correct : automatisation des corrections de longueur UCS.
+Application Streamlit - Correction automatique des longueurs UCS.
 
-Interface "console metier" avec navigation laterale :
+Interface "console metier" avec navigation laterale (cf. maquette) :
 
 Accueil (vitrine) -> Tableau de bord
                       |- Correction
@@ -14,9 +14,6 @@ Accueil (vitrine) -> Tableau de bord
 
 Aucune base de donnees : tout est conserve dans st.session_state, donc
 tout est perdu au rafraichissement complet de la page (comportement voulu).
-
-Logo : deposer le nouveau logo dans logos/wire_correct.png
-(si le fichier est absent, un logo SVG de secours est affiche).
 """
 
 import io
@@ -25,7 +22,6 @@ import uuid
 import base64
 from datetime import datetime
 
-import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -53,15 +49,18 @@ from change_summary import build_change_summary
 from ucs_parser import UCSStructureError
 
 
-st.set_page_config(page_title="Wire Correct", page_icon="🔧", layout="wide")
+st.set_page_config(page_title=PROJECT_TITLE, page_icon="🔧", layout="wide")
 
-LOGO_APP = "logos/wire_correct.png"   # <-- nouveau logo (centre en haut de page)
 LOGO_FST = "logos/fst.png"
-LOGO_LEAR = "logos/lear_logo.png"
+LOGO_LEAR = "logos/lear.png"
 
-APP_NAME = "WIRE CORRECT"
-APP_TAGLINE = "Automatisation des corrections de longueur UCS"
-LEAR_TAGLINE = "Making Every Drive Better"
+# Logo affiche en haut de la barre laterale (centre, grand, fond transparent).
+# Le premier fichier existant de la liste est utilise.
+LOGO_LEAR_NAVBAR_CANDIDATES = ["logos/lear_logo.png", LOGO_LEAR]
+
+# Textes de la marque dans la barre laterale
+BRAND_NAME = "WireCorrect"
+BRAND_TAGLINE = "Automatisation des corrections de longueurs UCS"
 
 # Icones = noms d'icones "Material Symbols" (rendues nativement par Streamlit
 # via le parametre icon=":material/xxx:" des st.button). Aucune emoji.
@@ -75,15 +74,16 @@ NAV_ITEMS = [
 ]
 
 PAGE_META = {
-    "dashboard": ("Tableau de bord", ["Accueil", "Tableau de bord"], "space_dashboard"),
-    "correction": ("Correction des longueurs", ["Accueil", "Correction", "Correction des longueurs"], "straighten"),
-    "rules": ("Regles d'arrondi", ["Accueil", "Correction", "Regles d'arrondi"], "tune"),
-    "historique": ("Historique", ["Accueil", "Historique"], "history"),
-    "rapports": ("Rapports de calcul", ["Accueil", "Rapports", "Rapports de calcul"], "fact_check"),
-    "exportations": ("Exportations", ["Accueil", "Rapports", "Exportations"], "file_download"),
+    "dashboard": ("Tableau de bord", ["Accueil", "Tableau de bord"]),
+    "correction": ("Correction des longueurs", ["Accueil", "Correction", "Correction des longueurs"]),
+    "rules": ("Regles d'arrondi", ["Accueil", "Correction", "Regles d'arrondi"]),
+    "historique": ("Historique", ["Accueil", "Historique"]),
+    "rapports": ("Rapports de calcul", ["Accueil", "Rapports", "Rapports de calcul"]),
+    "exportations": ("Exportations", ["Accueil", "Rapports", "Exportations"]),
 }
 
-# Palette partagee entre le CSS et les graphiques Plotly.
+# Palette partagee entre le CSS et les graphiques Plotly, pour rester coherent
+# avec l'identite visuelle de l'appli.
 CHART_COLORS = {
     "ok": "#15803d",
     "warn": "#b45309",
@@ -95,7 +95,6 @@ CHART_COLORS = {
     "increase": "#b45309",
     "decrease": "#0369a1",
     "unchanged": "#94a3b8",
-    "lear_red": "#c8102e",
 }
 
 # --------------------------------------------------------------------------
@@ -105,47 +104,8 @@ CHART_COLORS = {
 CUSTOM_CSS = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Merriweather:wght@700&family=Inter:wght@400;500;600;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,1,0&display=swap');
 
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
-
-.material-symbols-rounded {
-    font-family: 'Material Symbols Rounded' !important;
-    font-weight: normal;
-    font-style: normal;
-    font-size: 1.3rem;
-    line-height: 1;
-    display: inline-block;
-    vertical-align: middle;
-    letter-spacing: normal;
-    text-transform: none;
-    white-space: nowrap;
-    -webkit-font-smoothing: antialiased;
-    font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-}
-
-/* ---------- Header centre (logo + nom + sous-titre) ---------- */
-.app-header {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    padding: 0.2rem 0 1rem 0;
-    margin-bottom: 1rem;
-    border-bottom: 1px solid #e2e8f0;
-}
-.app-header .app-logo { height: 76px; width: auto; max-width: 240px; object-fit: contain; margin-bottom: 0.45rem; }
-.app-header .app-logo-svg { height: 76px; width: 76px; margin-bottom: 0.45rem; }
-.app-header .app-name {
-    font-family: 'Merriweather', serif;
-    font-size: 1.85rem;
-    letter-spacing: 0.16em;
-    color: #0b1f3a;
-    margin: 0;
-    line-height: 1.2;
-}
-.app-header .app-name-bar { width: 56px; height: 3px; background: #c8102e; border-radius: 2px; margin: 0.5rem auto 0.5rem auto; }
-.app-header .app-sub { font-size: 0.95rem; color: #64748b; letter-spacing: 0.03em; }
 
 /* ---------- Sidebar ---------- */
 section[data-testid="stSidebar"] {
@@ -154,17 +114,43 @@ section[data-testid="stSidebar"] {
 section[data-testid="stSidebar"] * { color: #e2e8f0; }
 section[data-testid="stSidebar"] .block-container { padding-top: 1.2rem; padding-bottom: 1.2rem; }
 
+/* Marque : logo centre (grand, sans fond) + nom + sous-titre */
 .sidebar-brand {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 0.6rem;
-    padding: 0.2rem 0.2rem 1.1rem 0.2rem;
+    text-align: center;
+    gap: 0.35rem;
+    padding: 0.6rem 0.4rem 1.3rem 0.4rem;
     border-bottom: 1px solid rgba(255,255,255,0.12);
     margin-bottom: 0.9rem;
 }
-.sidebar-brand img { height: 34px; width: auto; border-radius: 6px; background: white; padding: 2px; }
-.sidebar-brand .brand-text b { font-size: 1.05rem; color: #ffffff; display:block; letter-spacing: 0.08em; }
-.sidebar-brand .brand-text span { font-size: 0.72rem; color: #93c5fd; letter-spacing: 0.04em; }
+.sidebar-brand img.brand-logo {
+    width: 170px;
+    max-width: 85%;
+    height: auto;
+    background: transparent;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    margin-bottom: 0.5rem;
+    filter: drop-shadow(0 6px 16px rgba(0,0,0,0.35));
+}
+.sidebar-brand .brand-title {
+    font-family: 'Merriweather', serif;
+    font-size: 1.55rem;
+    font-weight: 700;
+    color: #ffffff;
+    letter-spacing: 0.02em;
+    line-height: 1.1;
+}
+.sidebar-brand .brand-subtitle {
+    font-size: 0.74rem;
+    color: #93c5fd;
+    letter-spacing: 0.03em;
+    line-height: 1.4;
+    max-width: 200px;
+}
 
 .sidebar-group-label {
     font-size: 0.66rem;
@@ -175,54 +161,27 @@ section[data-testid="stSidebar"] .block-container { padding-top: 1.2rem; padding
     font-weight: 700;
 }
 
-section[data-testid="stSidebar"] div[data-testid="stButton"] { margin-bottom: 0.18rem; }
+section[data-testid="stSidebar"] div[data-testid="stButton"] {
+    margin-bottom: 0.18rem;
+}
 section[data-testid="stSidebar"] div[data-testid="stButton"] button {
     background: transparent;
     border: 1px solid transparent;
+    text-align: left;
+    justify-content: flex-start;
+    align-items: center;
     color: #cbd5e1;
     font-weight: 500;
     font-size: 0.87rem;
     line-height: 1.2;
-    padding: 0.55rem 0.8rem;
+    padding: 0.55rem 0.7rem;
     border-radius: 9px;
     width: 100%;
     min-height: 2.5rem;
-    display: flex !important;
-    justify-content: flex-start !important;
-    align-items: center !important;
-    text-align: left !important;
-}
-/* ---- Alignement des icones : colonne d'icone de largeur fixe + texte aligne a gauche ---- */
-section[data-testid="stSidebar"] div[data-testid="stButton"] button > div {
-    display: flex !important;
-    flex-direction: row !important;
-    justify-content: flex-start !important;
-    align-items: center !important;
-    gap: 0.75rem !important;
-    width: 100% !important;
-    margin: 0 !important;
-}
-section[data-testid="stSidebar"] div[data-testid="stButton"] button span[data-testid="stIconMaterial"],
-section[data-testid="stSidebar"] div[data-testid="stButton"] button [data-testid="stIconMaterial"] {
-    flex: 0 0 1.5rem !important;
-    width: 1.5rem !important;
-    min-width: 1.5rem !important;
-    margin: 0 !important;
-    font-size: 1.3rem !important;
-    text-align: center !important;
-    display: inline-flex !important;
-    justify-content: center !important;
-    align-items: center !important;
-}
-section[data-testid="stSidebar"] div[data-testid="stButton"] button [data-testid="stMarkdownContainer"] {
-    flex: 1 1 auto !important;
-    text-align: left !important;
-    margin: 0 !important;
 }
 section[data-testid="stSidebar"] div[data-testid="stButton"] button p {
-    margin: 0 !important;
+    margin: 0;
     font-size: 0.87rem;
-    text-align: left !important;
 }
 section[data-testid="stSidebar"] div[data-testid="stButton"] button:hover {
     background: rgba(255,255,255,0.08);
@@ -241,17 +200,19 @@ section[data-testid="stSidebar"] div[data-testid="stButton"] button[kind="primar
 
 .sidebar-footer {
     margin-top: 1.6rem;
-    padding-top: 0.9rem;
+    padding-top: 1rem;
+    border-top: 1px solid rgba(255,255,255,0.12);
     display: flex;
     flex-direction: column;
     align-items: center;
     text-align: center;
-    gap: 0.4rem;
+    gap: 0.55rem;
 }
-.sidebar-footer .side-redline { width: 100%; height: 2px; background: #e4002b; border-radius: 2px; margin-bottom: 0.5rem; }
-.sidebar-footer .footer-logo { height: 28px; width: auto; background: #ffffff; border-radius: 6px; padding: 5px 10px; }
-.sidebar-footer .footer-company { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.1em; color: #ffffff; }
-.sidebar-footer .footer-text { font-size: 0.7rem; color: #7c93b3; line-height: 1.5; }
+.sidebar-footer .footer-text {
+    font-size: 0.7rem;
+    color: #7c93b3;
+    line-height: 1.5;
+}
 
 /* ---------- Top bar ---------- */
 .app-topbar {
@@ -259,19 +220,12 @@ section[data-testid="stSidebar"] div[data-testid="stButton"] button[kind="primar
     justify-content: space-between;
     align-items: center;
     padding-bottom: 0.6rem;
-    margin-bottom: 0.9rem;
+    margin-bottom: 0.6rem;
     border-bottom: 1px solid #e2e8f0;
 }
 .app-breadcrumb { color: #64748b; font-size: 0.85rem; }
 .app-breadcrumb b { color: #14497f; }
-.app-page-title {
-    font-family: 'Merriweather', serif; font-size: 1.7rem; color: #0f172a; margin: 0.15rem 0 0.2rem 0;
-    display: flex; align-items: center; gap: 0.6rem;
-}
-.app-page-title .title-icon {
-    width: 42px; height: 42px; border-radius: 12px; background: #eaf2fb; color: #14497f;
-    display: inline-flex; align-items: center; justify-content: center;
-}
+.app-page-title { font-family: 'Merriweather', serif; font-size: 1.9rem; color: #0f172a; margin: 0.15rem 0 0.2rem 0; }
 .app-badge-live {
     display: inline-block;
     background: #eef2ff; color: #3730a3; border: 1px solid #c7d2fe;
@@ -284,34 +238,22 @@ section[data-testid="stSidebar"] div[data-testid="stButton"] button[kind="primar
     flex: 1; min-width: 170px;
     background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px;
     padding: 1.1rem 1.3rem;
-    display: flex; align-items: center; gap: 0.9rem;
-    box-shadow: 0 1px 2px rgba(15,23,42,0.04);
 }
-.kpi-card .kpi-icon {
-    flex-shrink: 0; width: 46px; height: 46px; border-radius: 12px;
-    display: flex; align-items: center; justify-content: center;
-    background: #eaf2fb; color: #14497f;
-}
-.kpi-card.warn .kpi-icon { background: #fef3c7; color: #b45309; }
-.kpi-card.err .kpi-icon { background: #fee2e2; color: #b91c1c; }
-.kpi-card.ok .kpi-icon { background: #dcfce7; color: #15803d; }
-.kpi-card .kpi-label { font-size: 0.74rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
-.kpi-card .kpi-value { font-family: 'Merriweather', serif; font-size: 1.6rem; color: #14497f; font-weight: 700; margin-top: 0.1rem; }
+.kpi-card .kpi-label { font-size: 0.78rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
+.kpi-card .kpi-value { font-family: 'Merriweather', serif; font-size: 1.7rem; color: #14497f; font-weight: 700; margin-top: 0.15rem; }
 .kpi-card.warn .kpi-value { color: #b45309; }
 .kpi-card.err .kpi-value { color: #b91c1c; }
 .kpi-card.ok .kpi-value { color: #15803d; }
 
 .section-title {
     font-family: 'Merriweather', serif;
-    font-size: 1.2rem;
+    font-size: 1.25rem;
     color: #0f172a;
     margin-top: 0.4rem;
     margin-bottom: 0.9rem;
     border-left: 4px solid #14497f;
     padding-left: 0.7rem;
-    display: flex; align-items: center; gap: 0.5rem;
 }
-.section-title .material-symbols-rounded { color: #14497f; font-size: 1.35rem; }
 
 .chart-card {
     background: #ffffff;
@@ -319,18 +261,15 @@ section[data-testid="stSidebar"] div[data-testid="stButton"] button[kind="primar
     border-radius: 12px;
     padding: 0.9rem 1rem 0.4rem 1rem;
     margin-bottom: 1rem;
-    box-shadow: 0 1px 2px rgba(15,23,42,0.04);
 }
 .chart-card .chart-card-title {
-    font-size: 0.8rem;
+    font-size: 0.82rem;
     font-weight: 700;
     color: #334155;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     margin-bottom: 0.2rem;
-    display: flex; align-items: center; gap: 0.4rem;
 }
-.chart-card .chart-card-title .material-symbols-rounded { font-size: 1.1rem; color: #14497f; }
 
 .info-card {
     background: #f8fafc;
@@ -340,14 +279,6 @@ section[data-testid="stSidebar"] div[data-testid="stButton"] button[kind="primar
 }
 .info-card .label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: #64748b; margin-bottom: 0.15rem; }
 .info-card .value { font-size: 0.95rem; color: #0f172a; font-weight: 600; margin-bottom: 0.7rem; }
-
-.empty-state {
-    background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 14px;
-    padding: 2rem 1.5rem; text-align: center; color: #64748b; margin-bottom: 1rem;
-}
-.empty-state .material-symbols-rounded { font-size: 3rem; color: #94a3b8; }
-.empty-state h4 { margin: 0.4rem 0 0.2rem 0; color: #334155; }
-.empty-state p { margin: 0; font-size: 0.9rem; }
 
 .formula-box {
     background: #0b1f3a; color: #e2e8f0; border-radius: 10px;
@@ -360,12 +291,7 @@ section[data-testid="stSidebar"] div[data-testid="stButton"] button[kind="primar
 }
 .tag-pill.custom { background: #fff7ed; color: #9a3412; border-color: #fed7aa; }
 
-/* ---------- Footer principal : ligne rouge + LEAR Corporation + slogan ---------- */
-.app-footer { margin-top: 2.5rem; text-align: center; }
-.app-footer .footer-redline { height: 3px; width: 100%; background: #e4002b; border-radius: 2px; margin-bottom: 1rem; }
-.app-footer .footer-company { font-family: 'Merriweather', serif; font-size: 1.05rem; letter-spacing: 0.18em; color: #0f172a; text-transform: uppercase; }
-.app-footer .footer-tagline { font-size: 0.85rem; color: #c8102e; font-style: italic; margin-top: 0.15rem; font-weight: 600; letter-spacing: 0.04em; }
-.app-footer .footer-meta { font-size: 0.74rem; color: #94a3b8; margin-top: 0.6rem; }
+.footer-note { text-align: center; color: #94a3b8; font-size: 0.8rem; margin-top: 2rem; padding-top: 1.2rem; border-top: 1px solid #e2e8f0; }
 
 .logo-caption { text-align: center; color: #94a3b8; font-size: 0.78rem; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 0.4rem; }
 .logo-sep { text-align: center; padding-top: 1.4rem; color: #cbd5e1; font-size: 1.3rem; font-weight: 300; }
@@ -374,83 +300,28 @@ section[data-testid="stSidebar"] div[data-testid="stButton"] button[kind="primar
     padding: 3rem 3rem 2.6rem 3rem; border-radius: 18px; color: #f1f5f9;
     margin-top: 1rem; margin-bottom: 1.4rem; position: relative; overflow: hidden;
 }
-.hero::after {
-    content: ""; position: absolute; right: -60px; top: -60px; width: 260px; height: 260px;
-    border-radius: 50%; background: radial-gradient(circle, rgba(228,0,43,0.35) 0%, rgba(228,0,43,0) 70%);
-}
-.hero::before {
-    content: ""; position: absolute; right: 80px; bottom: -90px; width: 240px; height: 240px;
-    border-radius: 50%; background: radial-gradient(circle, rgba(59,130,246,0.35) 0%, rgba(59,130,246,0) 70%);
-}
 .hero .eyebrow { text-transform: uppercase; letter-spacing: 0.12em; font-size: 0.78rem; color: #93c5fd; font-weight: 600; margin-bottom: 0.6rem; }
-.hero h1 { font-family: 'Merriweather', serif; font-size: 2.35rem; line-height: 1.25; margin: 0 0 0.9rem 0; position: relative; z-index: 1; }
-.hero p.subtitle { font-size: 1.05rem; color: #cbd5e1; max-width: 700px; margin-bottom: 1.2rem; position: relative; z-index: 1; }
-.hero .badge { display: inline-flex; align-items: center; gap: 0.35rem; background: rgba(255,255,255,0.10); border: 1px solid rgba(255,255,255,0.22); padding: 0.3rem 0.85rem; border-radius: 999px; font-size: 0.82rem; margin-right: 0.5rem; margin-bottom: 0.3rem; position: relative; z-index: 1; }
-.hero .badge .material-symbols-rounded { font-size: 1rem; }
+.hero h1 { font-family: 'Merriweather', serif; font-size: 2.35rem; line-height: 1.25; margin: 0 0 0.9rem 0; }
+.hero p.subtitle { font-size: 1.05rem; color: #cbd5e1; max-width: 700px; margin-bottom: 1.2rem; }
+.hero .badge { display: inline-block; background: rgba(255,255,255,0.10); border: 1px solid rgba(255,255,255,0.22); padding: 0.3rem 0.85rem; border-radius: 999px; font-size: 0.82rem; margin-right: 0.5rem; margin-bottom: 0.3rem; }
 .highlight-bar { display: flex; gap: 1rem; margin-bottom: 1.8rem; }
-.highlight-item { flex: 1; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1rem 1.2rem; text-align: center; box-shadow: 0 1px 2px rgba(15,23,42,0.04); }
-.highlight-item .hl-icon { color: #3b82f6; }
+.highlight-item { flex: 1; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1rem 1.2rem; text-align: center; }
 .highlight-item .num { font-family: 'Merriweather', serif; font-size: 1.5rem; color: #14497f; font-weight: 700; }
 .highlight-item .label { font-size: 0.78rem; color: #64748b; margin-top: 0.15rem; }
-.feature-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.3rem 1.4rem; height: 100%; box-shadow: 0 1px 2px rgba(15,23,42,0.04); }
-.feature-card .icon {
-    width: 48px; height: 48px; border-radius: 14px; background: linear-gradient(135deg, #14497f, #3b82f6);
-    color: #ffffff; display: flex; align-items: center; justify-content: center; margin-bottom: 0.7rem;
-}
-.feature-card .icon .material-symbols-rounded { font-size: 1.6rem; }
+.feature-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.3rem 1.4rem; height: 100%; }
+.feature-card .icon { font-size: 1.5rem; margin-bottom: 0.4rem; }
 .feature-card h4 { margin: 0 0 0.35rem 0; font-size: 1.02rem; color: #0f172a; }
 .feature-card p { color: #475569; font-size: 0.9rem; margin-bottom: 0; line-height: 1.45; }
 .step-row { display: flex; align-items: flex-start; gap: 0.9rem; margin-bottom: 1.1rem; }
-.step-number { flex-shrink: 0; width: 38px; height: 38px; border-radius: 50%; background: #14497f; color: white; display: flex; align-items: center; justify-content: center; }
-.step-number .material-symbols-rounded { font-size: 1.2rem; }
+.step-number { flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%; background: #14497f; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.95rem; }
 .step-text h5 { margin: 0 0 0.15rem 0; font-size: 0.96rem; color: #0f172a; }
 .step-text p { margin: 0; font-size: 0.87rem; color: #64748b; }
 .tech-chip { display: inline-block; background: #eef2ff; color: #3730a3; border: 1px solid #c7d2fe; padding: 0.28rem 0.75rem; border-radius: 999px; font-size: 0.8rem; margin-right: 0.4rem; margin-bottom: 0.4rem; }
 .logo-frame { display: flex; align-items: center; justify-content: center; height: 90px; }
 .logo-frame img { margin-top: -5em; max-height: 180px; max-width: 200%; width: auto; height: auto; object-fit: contain; }
-
-/* ---------- Pipeline (accueil) ---------- */
-.pipeline { display: flex; align-items: center; justify-content: center; gap: 0.6rem; flex-wrap: wrap; margin: 0.4rem 0 1.6rem 0; }
-.pipe-node {
-    display: flex; flex-direction: column; align-items: center; gap: 0.25rem;
-    background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 0.8rem 1.1rem; min-width: 120px;
-    box-shadow: 0 1px 2px rgba(15,23,42,0.04);
-}
-.pipe-node .material-symbols-rounded { color: #14497f; font-size: 1.7rem; }
-.pipe-node span.t { font-size: 0.8rem; font-weight: 600; color: #334155; }
-.pipe-arrow { color: #c8102e; }
 </style>
 """
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
-
-
-# --------------------------------------------------------------------------
-# Helpers HTML (icones, titres, KPI)
-# --------------------------------------------------------------------------
-
-def mi(name):
-    """Icone Material Symbols inline (HTML)."""
-    return f'<span class="material-symbols-rounded">{name}</span>'
-
-
-def section_title(text, icon=None):
-    icon_html = mi(icon) if icon else ""
-    st.markdown(f'<div class="section-title">{icon_html}{text}</div>', unsafe_allow_html=True)
-
-
-def kpi_card_html(label, value, icon, variant="", value_style=""):
-    style = f' style="{value_style}"' if value_style else ""
-    return (
-        f'<div class="kpi-card {variant}"><div class="kpi-icon">{mi(icon)}</div>'
-        f'<div><div class="kpi-label">{label}</div><div class="kpi-value"{style}>{value}</div></div></div>'
-    )
-
-
-def empty_state(icon, title, text):
-    st.markdown(
-        f'<div class="empty-state">{mi(icon)}<h4>{title}</h4><p>{text}</p></div>',
-        unsafe_allow_html=True,
-    )
 
 
 # --------------------------------------------------------------------------
@@ -551,10 +422,54 @@ def get_history_entry(entry_id):
     return None
 
 
-@st.cache_data(show_spinner=False)
 def _image_to_base64(path):
     with open(path, "rb") as f:
         return base64.b64encode(f.read()).decode("utf-8")
+
+
+def _navbar_logo_path():
+    for p in LOGO_LEAR_NAVBAR_CANDIDATES:
+        if os.path.exists(p):
+            return p
+    return None
+
+
+@st.cache_data(show_spinner=False)
+def _transparent_logo_b64(path, mtime):
+    """Retourne le logo en base64 PNG avec un fond transparent.
+
+    - Si le PNG a deja de la transparence (canal alpha reel), il est utilise tel quel.
+    - Sinon, les pixels blancs / quasi blancs (fond) sont rendus transparents,
+      avec un degrade doux sur les bords pour eviter un liseré blanc.
+    Si Pillow n'est pas disponible, le fichier d'origine est utilise sans changement.
+    `mtime` ne sert qu'a invalider le cache quand le fichier change.
+    """
+    try:
+        from PIL import Image
+    except ImportError:
+        return _image_to_base64(path)
+
+    img = Image.open(path).convert("RGBA")
+    pixels = list(img.getdata())
+
+    already_transparent = any(a < 250 for (_, _, _, a) in pixels)
+    if not already_transparent:
+        hard, soft = 245, 215   # >= hard : transparent ; entre soft et hard : degrade
+        new_pixels = []
+        for r, g, b, a in pixels:
+            m = min(r, g, b)
+            if m >= hard:
+                new_pixels.append((r, g, b, 0))
+            elif m > soft:
+                alpha = int(255 * (hard - m) / (hard - soft))
+                new_pixels.append((r, g, b, alpha))
+            else:
+                new_pixels.append((r, g, b, a))
+        img.putdata(new_pixels)
+
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return base64.b64encode(buf.getvalue()).decode("utf-8")
 
 
 # --------------------------------------------------------------------------
@@ -606,30 +521,6 @@ def make_status_donut(n_ok, n_warnings, n_errors, height=250, title=None):
     total = sum(values)
     fig.add_annotation(text=f"<b>{total}</b><br><span style='font-size:10px'>elements</span>", showarrow=False, font=dict(size=16, color="#0f172a"))
     return _plotly_layout_defaults(fig, height, title)
-
-
-def make_gauge(value_pct, height=240, title=None):
-    """Jauge du taux d'elements OK (0-100 %)."""
-    color = CHART_COLORS["ok"] if value_pct >= 90 else CHART_COLORS["warn"] if value_pct >= 70 else CHART_COLORS["err"]
-    fig = go.Figure(
-        go.Indicator(
-            mode="gauge+number",
-            value=value_pct,
-            number=dict(suffix=" %", font=dict(size=30, color="#0f172a", family="Inter")),
-            gauge=dict(
-                axis=dict(range=[0, 100], tickwidth=1, tickcolor="#cbd5e1"),
-                bar=dict(color=color, thickness=0.28),
-                bgcolor="#f1f5f9",
-                borderwidth=0,
-                steps=[
-                    dict(range=[0, 70], color="#fee2e2"),
-                    dict(range=[70, 90], color="#fef3c7"),
-                    dict(range=[90, 100], color="#dcfce7"),
-                ],
-            ),
-        )
-    )
-    return _plotly_layout_defaults(fig, height, title, show_legend=False)
 
 
 def make_bar_chart(categories, values, color=CHART_COLORS["primary"], height=250, title=None, horizontal=False):
@@ -700,116 +591,12 @@ def make_histogram(values, color=CHART_COLORS["primary"], height=260, title=None
     return _plotly_layout_defaults(fig, height, title, show_legend=False)
 
 
-def make_delta_scatter(df, height=260):
-    """Delta (continu et arrondi) en fonction de la longueur d'origine.
-
-    La longueur d'origine est reconstruite : New Length (mm) - Delta arrondi (mm).
-    Retourne None si les colonnes necessaires sont absentes.
-    """
-    needed = ["New Length (mm)", "Delta arrondi (mm)"]
-    if not all(c in df.columns for c in needed):
-        return None
-    new_len = pd.to_numeric(df["New Length (mm)"], errors="coerce")
-    d_round = pd.to_numeric(df["Delta arrondi (mm)"], errors="coerce")
-    length = new_len - d_round
-    fig = go.Figure()
-    if "Delta predit continu (mm)" in df.columns:
-        d_cont = pd.to_numeric(df["Delta predit continu (mm)"], errors="coerce")
-        fig.add_trace(
-            go.Scatter(
-                x=length, y=d_cont, mode="markers", name="Delta continu",
-                marker=dict(size=6, color=_with_alpha(CHART_COLORS["accent"], 0.55)),
-            )
-        )
-    fig.add_trace(
-        go.Scatter(
-            x=length, y=d_round, mode="markers", name="Delta arrondi",
-            marker=dict(size=6, color=_with_alpha(CHART_COLORS["primary_light"], 0.75), symbol="diamond"),
-        )
-    )
-    fig.update_xaxes(showgrid=False, title_text="Longueur d'origine (mm)")
-    fig.update_yaxes(showgrid=True, gridcolor="#e2e8f0", zeroline=True, zerolinecolor="#94a3b8", title_text="Delta (mm)")
-    return _plotly_layout_defaults(fig, height, None, show_legend=True)
-
-
-def model_delta(lengths, rules):
-    """Delta continu predit par le modele pour un tableau de longueurs."""
-    lengths = np.asarray(lengths, dtype=float)
-    delta = rules["log_a"] * np.log(lengths) + rules["log_b"]
-    for a_i, c_i, s_i in rules["gaussian_params"]:
-        s_i = s_i if abs(s_i) > 1e-12 else 1e-12
-        delta = delta + a_i * np.exp(-((lengths - c_i) ** 2) / (2.0 * s_i ** 2))
-    return delta
-
-
-def make_model_curve(rules, l_min, l_max, height=300):
-    """Courbe du modele (continu) + version arrondie au pas metier."""
-    lengths = np.linspace(max(l_min, 1), max(l_max, l_min + 1), 600)
-    cont = model_delta(lengths, rules)
-    step = max(rules["rounding_step"], 1)
-    rounded = step * np.round(cont / step)
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=lengths, y=cont, mode="lines", name="Delta continu",
-                             line=dict(width=2.5, color=CHART_COLORS["primary_light"])))
-    fig.add_trace(go.Scatter(x=lengths, y=rounded, mode="lines", name=f"Delta arrondi (pas {step} mm)",
-                             line=dict(width=2, color=CHART_COLORS["lear_red"], shape="hv")))
-    fig.update_xaxes(showgrid=False, title_text="Longueur L (mm)")
-    fig.update_yaxes(showgrid=True, gridcolor="#e2e8f0", zeroline=True, zerolinecolor="#94a3b8", title_text="Delta (mm)")
-    return _plotly_layout_defaults(fig, height, None, show_legend=True)
-
-
-def chart_card_open(title, icon="insights"):
-    st.markdown(
-        f'<div class="chart-card"><div class="chart-card-title">{mi(icon)}{title}</div>',
-        unsafe_allow_html=True,
-    )
+def chart_card_open(title):
+    st.markdown(f'<div class="chart-card"><div class="chart-card-title">{title}</div>', unsafe_allow_html=True)
 
 
 def chart_card_close():
     st.markdown("</div>", unsafe_allow_html=True)
-
-
-# --------------------------------------------------------------------------
-# Header (logo centre + nom + sous-titre) et footer (ligne rouge + LEAR)
-# --------------------------------------------------------------------------
-
-FALLBACK_LOGO_SVG = """
-<svg class="app-logo-svg" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="wcg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#14497f"/><stop offset="1" stop-color="#3b82f6"/>
-    </linearGradient>
-  </defs>
-  <rect x="4" y="4" width="72" height="72" rx="18" fill="url(#wcg)"/>
-  <path d="M14 48 C 26 20, 34 60, 46 32 S 62 40, 68 24" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round"/>
-  <circle cx="14" cy="48" r="4.5" fill="#e4002b"/>
-  <circle cx="68" cy="24" r="4.5" fill="#e4002b"/>
-</svg>
-"""
-
-
-def render_app_header():
-    """Logo centre en haut + 'WIRE CORRECT' + sous-titre, sur toutes les pages."""
-    if os.path.exists(LOGO_APP):
-        logo_html = f'<img class="app-logo" src="data:image/png;base64,{_image_to_base64(LOGO_APP)}">'
-    else:
-        logo_html = FALLBACK_LOGO_SVG
-
-
-
-def render_footer():
-    """Ligne rouge horizontale, puis LEAR Corporation et le slogan."""
-    st.markdown(
-        f"""
-        <div class="app-footer">
-            <div class="footer-redline"></div>
-            <div class="footer-company">LEAR Corporation</div>
-            <div class="footer-tagline">{LEAR_TAGLINE}</div>
-            <div class="footer-meta">{PROJECT_TITLE} &middot; {PROJECT_TYPE} {PROJECT_ACADEMIC_YEAR} &middot; {PROJECT_AUTHOR}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
 
 
 # --------------------------------------------------------------------------
@@ -818,17 +605,18 @@ def render_footer():
 
 def render_sidebar():
     with st.sidebar:
-        if os.path.exists(LOGO_APP):
-            logo_html = f'<img src="data:image/png;base64,{_image_to_base64(LOGO_APP)}">'
-        elif os.path.exists(LOGO_LEAR):
-            logo_html = f'<img src="data:image/png;base64,{_image_to_base64(LOGO_LEAR)}">'
+        logo_path = _navbar_logo_path()
+        if logo_path:
+            b64 = _transparent_logo_b64(logo_path, os.path.getmtime(logo_path))
+            logo_html = f'<img class="brand-logo" src="data:image/png;base64,{b64}" alt="LEAR">'
         else:
             logo_html = ""
         st.markdown(
             f"""
             <div class="sidebar-brand">
                 {logo_html}
-                <div class="brand-text"><b>WIRE CORRECT</b><span>CORRECTION UCS</span></div>
+                <div class="brand-title">{BRAND_NAME}</div>
+                <div class="brand-subtitle">{BRAND_TAGLINE}</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -852,16 +640,10 @@ def render_sidebar():
                 st.session_state.page = item["key"]
                 st.rerun()
 
-        lear_logo_html = ""
-        if os.path.exists(LOGO_LEAR):
-            lear_logo_html = f'<img src="data:image/png;base64,{_image_to_base64(LOGO_LEAR)}" class="footer-logo">'
         st.markdown(
             f"""
             <div class="sidebar-footer">
-                <div class="side-redline"></div>
-                {lear_logo_html}
-                <div class="footer-company">LEAR CORPORATION</div>
-                <div class="footer-text">{LEAR_TAGLINE}<br>Version {MODEL_VERSION} &middot; {PROJECT_ACADEMIC_YEAR}</div>
+                <div class="footer-text">{PROJECT_TITLE}<br>Version {MODEL_VERSION} &middot; {PROJECT_ACADEMIC_YEAR}</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -869,17 +651,17 @@ def render_sidebar():
 
 
 def render_topbar(page_key):
-    title, crumbs, icon = PAGE_META[page_key]
+    title, crumbs = PAGE_META[page_key]
     crumb_html = " &nbsp;›&nbsp; ".join(
         f"<b>{c}</b>" if i == len(crumbs) - 1 else c for i, c in enumerate(crumbs)
     )
-    live_badge = f'<span class="app-badge-live">{mi("circle")} Session active</span>'
+    live_badge = '<span class="app-badge-live">🟢 Session active</span>'
     st.markdown(
         f"""
         <div class="app-topbar">
             <div>
                 <div class="app-breadcrumb">{crumb_html}</div>
-                <div class="app-page-title"><span class="title-icon">{mi(icon)}</span>{title}</div>
+                <div class="app-page-title">{title}</div>
             </div>
             <div>{live_badge}</div>
         </div>
@@ -918,8 +700,8 @@ def render_home():
             <div class="eyebrow">{PROJECT_TYPE} - Annee universitaire {PROJECT_ACADEMIC_YEAR}</div>
             <h1>{PROJECT_TITLE}</h1>
             <p class="subtitle">{PROJECT_SUBTITLE}</p>
-            <span class="badge">{mi("person")} Realise par {PROJECT_AUTHOR}</span>
-            <span class="badge">{mi("school")} {PROJECT_INSTITUTION}</span>
+            <span class="badge">👤 Realise par {PROJECT_AUTHOR}</span>
+            <span class="badge">🏫 {PROJECT_INSTITUTION}</span>
         </div>
         """,
         unsafe_allow_html=True,
@@ -928,28 +710,10 @@ def render_home():
     st.markdown(
         f"""
         <div class="highlight-bar">
-            <div class="highlight-item"><div class="hl-icon">{mi("table_chart")}</div><div class="num">2</div><div class="label">Feuilles UCS supportees<br>(Wires / Tubes)</div></div>
-            <div class="highlight-item"><div class="hl-icon">{mi("straighten")}</div><div class="num">{ROUNDING_STEP_MM} mm</div><div class="label">Pas d'arrondi par defaut</div></div>
-            <div class="highlight-item"><div class="hl-icon">{mi("verified_user")}</div><div class="num">100%</div><div class="label">Fichier source jamais modifie</div></div>
-            <div class="highlight-item"><div class="hl-icon">{mi("model_training")}</div><div class="num">{MODEL_VERSION}</div><div class="label">Version du modele actif</div></div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    # Pipeline visuel
-    st.markdown(
-        f"""
-        <div class="pipeline">
-            <div class="pipe-node">{mi("upload_file")}<span class="t">Import UCS</span></div>
-            <span class="pipe-arrow">{mi("arrow_forward")}</span>
-            <div class="pipe-node">{mi("calculate")}<span class="t">Modele + arrondi</span></div>
-            <span class="pipe-arrow">{mi("arrow_forward")}</span>
-            <div class="pipe-node">{mi("fact_check")}<span class="t">Controle</span></div>
-            <span class="pipe-arrow">{mi("arrow_forward")}</span>
-            <div class="pipe-node">{mi("task_alt")}<span class="t">Validation</span></div>
-            <span class="pipe-arrow">{mi("arrow_forward")}</span>
-            <div class="pipe-node">{mi("download")}<span class="t">Export</span></div>
+            <div class="highlight-item"><div class="num">2</div><div class="label">Feuilles UCS supportees<br>(Wires / Tubes)</div></div>
+            <div class="highlight-item"><div class="num">{ROUNDING_STEP_MM} mm</div><div class="label">Pas d'arrondi par defaut</div></div>
+            <div class="highlight-item"><div class="num">100%</div><div class="label">Fichier source jamais modifie</div></div>
+            <div class="highlight-item"><div class="num">{MODEL_VERSION}</div><div class="label">Version du modele actif</div></div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -957,7 +721,7 @@ def render_home():
 
     left, right = st.columns([2, 1])
     with left:
-        section_title("Contexte et problematique", "article")
+        st.markdown('<div class="section-title">Contexte et problematique</div>', unsafe_allow_html=True)
         st.write(
             "Dans un dossier de cablage automobile, les longueurs de fils et de "
             "tubes definies en CAO doivent frequemment etre ajustees pour "
@@ -974,7 +738,7 @@ def render_home():
             "du modele, ajustables depuis l'outil."
         )
 
-        section_title("Modele mathematique utilise", "function")
+        st.markdown('<div class="section-title">Modele mathematique utilise</div>', unsafe_allow_html=True)
         st.markdown(
             f"""<div class="formula-box">
             Delta(L) = {LOG_COEFF_A} . ln(L) + {LOG_COEFF_B}
@@ -989,25 +753,14 @@ def render_home():
             "et sauvegardables depuis la page « Regles d'arrondi » une fois dans l'outil."
         )
 
-        section_title("Courbe du modele (valeurs par defaut)", "show_chart")
-        default_rules = {
-            "rounding_step": ROUNDING_STEP_MM,
-            "log_a": LOG_COEFF_A,
-            "log_b": LOG_COEFF_B,
-            "gaussian_params": [list(p) for p in GAUSSIAN_PARAMS],
-        }
-        chart_card_open("Delta predit en fonction de la longueur", "show_chart")
-        st.plotly_chart(make_model_curve(default_rules, 50, 3000, height=280), use_container_width=True, config={"displayModeBar": False})
-        chart_card_close()
-
-        section_title("Technologies utilisees", "build")
+        st.markdown('<div class="section-title">Technologies utilisees</div>', unsafe_allow_html=True)
         st.markdown(
             "".join(f'<span class="tech-chip">{t}</span>' for t in ["Python", "Streamlit", "pandas", "openpyxl", "python-docx", "plotly", "pytest"]),
             unsafe_allow_html=True,
         )
 
     with right:
-        section_title("Fiche projet", "badge")
+        st.markdown('<div class="section-title">Fiche projet</div>', unsafe_allow_html=True)
         st.markdown(
             f"""
             <div class="info-card">
@@ -1022,50 +775,55 @@ def render_home():
         )
 
     st.write("")
-    section_title("Fonctionnalites principales", "star")
+    st.markdown('<div class="section-title">Fonctionnalites principales</div>', unsafe_allow_html=True)
     col1, col2, col3 = st.columns(3)
     with col1:
         st.markdown(
-            f"""<div class="feature-card"><div class="icon">{mi("upload_file")}</div><h4>Import et detection automatique</h4>
+            """<div class="feature-card"><div class="icon">📥</div><h4>Import et detection automatique</h4>
             <p>Detection automatique des feuilles Wires/Tubes et de leurs colonnes Name/Length,
             sans jamais alterer le fichier source.</p></div>""",
             unsafe_allow_html=True,
         )
     with col2:
         st.markdown(
-            f"""<div class="feature-card"><div class="icon">{mi("tune")}</div><h4>Regles metier modifiables</h4>
+            """<div class="feature-card"><div class="icon">⚙️</div><h4>Regles metier modifiables</h4>
             <p>Pas d'arrondi et coefficients du modele ajustables et sauvegardables,
             puis appliques automatiquement a chaque nouveau calcul.</p></div>""",
             unsafe_allow_html=True,
         )
     with col3:
         st.markdown(
-            f"""<div class="feature-card"><div class="icon">{mi("history")}</div><h4>Historique et tracabilite</h4>
+            """<div class="feature-card"><div class="icon">📋</div><h4>Historique et tracabilite</h4>
             <p>Chaque calcul est trace en session, avec rapport exportable
             (Excel/CSV) et demande d'ajustement (.docx).</p></div>""",
             unsafe_allow_html=True,
         )
 
     st.write("")
-    section_title("Comment ca marche", "help")
+    st.markdown('<div class="section-title">Comment ca marche</div>', unsafe_allow_html=True)
     steps = [
-        ("Importer", "Deposer un fichier UCS (.xlsx) contenant les feuilles Wires et/ou Tubes.", "upload_file"),
-        ("Calculer", "L'application detecte les colonnes, applique les regles actives et arrondit chaque delta.", "calculate"),
-        ("Verifier", "Le tableau de controle liste chaque element avec son statut (OK / avertissement / erreur).", "fact_check"),
-        ("Valider et exporter", "Une fois valide, le calcul est trace dans l'historique et les fichiers sont prets a exporter.", "task_alt"),
+        ("Importer", "Deposer un fichier UCS (.xlsx) contenant les feuilles Wires et/ou Tubes."),
+        ("Calculer", "L'application detecte les colonnes, applique les regles actives et arrondit chaque delta."),
+        ("Verifier", "Le tableau de controle liste chaque element avec son statut (OK / avertissement / erreur)."),
+        ("Valider et exporter", "Une fois valide, le calcul est trace dans l'historique et les fichiers sont prets a exporter."),
     ]
-    for i, (title, desc, icon) in enumerate(steps, start=1):
+    for i, (title, desc) in enumerate(steps, start=1):
         st.markdown(
-            f"""<div class="step-row"><div class="step-number">{mi(icon)}</div>
-                <div class="step-text"><h5>{i}. {title}</h5><p>{desc}</p></div></div>""",
+            f"""<div class="step-row"><div class="step-number">{i}</div>
+                <div class="step-text"><h5>{title}</h5><p>{desc}</p></div></div>""",
             unsafe_allow_html=True,
         )
 
     st.write("")
     st.divider()
-    if st.button("Acceder a l'outil", type="primary", icon=":material/arrow_forward:"):
+    if st.button("Acceder a l'outil ➜", type="primary"):
         st.session_state.page = "dashboard"
         st.rerun()
+
+    st.markdown(
+        f'<div class="footer-note">{PROJECT_TITLE} — {PROJECT_TYPE} {PROJECT_ACADEMIC_YEAR} — {PROJECT_AUTHOR}</div>',
+        unsafe_allow_html=True,
+    )
 
 
 # --------------------------------------------------------------------------
@@ -1081,42 +839,39 @@ def render_dashboard():
     n_errors = sum(h["n_errors"] for h in historique)
     n_warnings = sum(h["n_warnings"] for h in historique)
     n_ok = sum(h["n_ok"] for h in historique)
-    ok_rate = round(100 * n_ok / n_elements, 1) if n_elements else 0
 
     st.markdown(
         f"""
         <div class="kpi-row">
-            {kpi_card_html("Calculs (session)", n_calculs, "calculate")}
-            {kpi_card_html("Elements traites", n_elements, "cable", "ok")}
-            {kpi_card_html("Avertissements cumules", n_warnings, "warning", "warn")}
-            {kpi_card_html("Erreurs cumulees", n_errors, "error", "err")}
+            <div class="kpi-card"><div class="kpi-label">Calculs (session)</div><div class="kpi-value">{n_calculs}</div></div>
+            <div class="kpi-card"><div class="kpi-label">Elements traites</div><div class="kpi-value">{n_elements}</div></div>
+            <div class="kpi-card warn"><div class="kpi-label">Avertissements cumules</div><div class="kpi-value">{n_warnings}</div></div>
+            <div class="kpi-card err"><div class="kpi-label">Erreurs cumulees</div><div class="kpi-value">{n_errors}</div></div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
     if historique:
-        chart_col1, chart_col2, chart_col3, chart_col4 = st.columns([1, 1, 1.2, 1.3])
-        recent = list(reversed(historique[:8]))
-        labels = [f'{h["timestamp"][11:16]}' for h in recent]
+        chart_col1, chart_col2, chart_col3 = st.columns([1, 1.3, 1.3])
         with chart_col1:
-            chart_card_open("Statuts", "donut_large")
-            st.plotly_chart(make_status_donut(n_ok, n_warnings, n_errors, height=230), use_container_width=True, config={"displayModeBar": False})
+            chart_card_open("Repartition globale des statuts")
+            st.plotly_chart(make_status_donut(n_ok, n_warnings, n_errors, height=240), use_container_width=True, config={"displayModeBar": False})
             chart_card_close()
         with chart_col2:
-            chart_card_open("Taux d'elements OK", "speed")
-            st.plotly_chart(make_gauge(ok_rate, height=230), use_container_width=True, config={"displayModeBar": False})
-            chart_card_close()
-        with chart_col3:
-            chart_card_open("Elements par calcul", "bar_chart")
+            chart_card_open("Elements traites par calcul")
+            recent = list(reversed(historique[:8]))
+            labels = [f'{h["timestamp"][11:16]}' for h in recent]
             st.plotly_chart(
-                make_bar_chart(labels, [h["n_total"] for h in recent], color=CHART_COLORS["primary"], height=230),
+                make_bar_chart(labels, [h["n_total"] for h in recent], color=CHART_COLORS["primary"], height=240),
                 use_container_width=True,
                 config={"displayModeBar": False},
             )
             chart_card_close()
-        with chart_col4:
-            chart_card_open("Tendance avertissements / erreurs", "trending_up")
+        with chart_col3:
+            chart_card_open("Tendance avertissements / erreurs")
+            recent = list(reversed(historique[:8]))
+            labels = [f'{h["timestamp"][11:16]}' for h in recent]
             st.plotly_chart(
                 make_trend_chart(
                     labels,
@@ -1124,23 +879,17 @@ def render_dashboard():
                         "Avertissements": ([h["n_warnings"] for h in recent], CHART_COLORS["warn"]),
                         "Erreurs": ([h["n_errors"] for h in recent], CHART_COLORS["err"]),
                     },
-                    height=230,
+                    height=240,
                 ),
                 use_container_width=True,
                 config={"displayModeBar": False},
             )
             chart_card_close()
-    else:
-        empty_state(
-            "monitoring",
-            "Aucune statistique pour l'instant",
-            "Les graphiques apparaitront apres votre premier calcul valide.",
-        )
 
     left, right = st.columns([1.6, 1])
 
     with left:
-        section_title("Derniers calculs", "schedule")
+        st.markdown('<div class="section-title">Derniers calculs</div>', unsafe_allow_html=True)
         if not historique:
             st.info("Aucun calcul effectue pour l'instant dans cette session. Commencez par « Correction des longueurs ».")
         else:
@@ -1162,7 +911,7 @@ def render_dashboard():
             if len(historique) > 8:
                 st.caption(f"+ {len(historique) - 8} autre(s) calcul(s) — voir « Historique ».")
 
-        section_title("Acces rapide", "bolt")
+        st.markdown('<div class="section-title">Acces rapide</div>', unsafe_allow_html=True)
         qc1, qc2, qc3, qc4 = st.columns(4)
         with qc1:
             if st.button("Nouveau calcul", use_container_width=True, icon=":material/straighten:"):
@@ -1182,7 +931,7 @@ def render_dashboard():
                 st.rerun()
 
     with right:
-        section_title("Regles actives", "rule")
+        st.markdown('<div class="section-title">Regles actives</div>', unsafe_allow_html=True)
         r = st.session_state.rules
         custom = rules_are_custom()
         st.markdown(
@@ -1200,12 +949,12 @@ def render_dashboard():
             """,
             unsafe_allow_html=True,
         )
-        if st.button("Modifier les regles", use_container_width=True, icon=":material/tune:"):
+        if st.button("Modifier les regles ➜", use_container_width=True):
             st.session_state.page = "rules"
             st.rerun()
 
         if st.session_state.results is not None:
-            section_title("Calcul en cours", "pending_actions")
+            st.markdown('<div class="section-title">Calcul en cours</div>', unsafe_allow_html=True)
             res = st.session_state.results
             st.markdown(
                 f"""
@@ -1270,7 +1019,7 @@ def render_correction():
         st.session_state.source_bytes = file_bytes
         st.session_state.source_name = uploaded_file.name
 
-        if st.button("Calculer", type="primary", icon=":material/play_arrow:"):
+        if st.button("Calculer", type="primary"):
             try:
                 run_calculation(file_bytes)
             except UCSStructureError as exc:
@@ -1294,24 +1043,15 @@ def render_correction():
                 f"en-tete ligne {layout.header_row_index}."
             )
 
-        n_total = len(result.results_df)
-        ok_rate = round(100 * result.n_ok / n_total, 1) if n_total else 0
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Elements traites", len(result.results_df))
+        col2.metric("OK", result.n_ok)
+        col3.metric("Avertissements", result.n_warnings)
+        col4.metric("Erreurs", result.n_errors)
 
-        st.markdown(
-            f"""
-            <div class="kpi-row">
-                {kpi_card_html("Elements traites", n_total, "cable")}
-                {kpi_card_html("OK", result.n_ok, "check_circle", "ok")}
-                {kpi_card_html("Avertissements", result.n_warnings, "warning", "warn")}
-                {kpi_card_html("Erreurs", result.n_errors, "error", "err")}
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-        chart_col1, chart_col2, chart_col3 = st.columns([1, 1, 1.5])
+        chart_col1, chart_col2 = st.columns([1, 1.6])
         with chart_col1:
-            chart_card_open("Repartition des statuts", "donut_large")
+            chart_card_open("Repartition des statuts")
             st.plotly_chart(
                 make_status_donut(result.n_ok, result.n_warnings, result.n_errors, height=230),
                 use_container_width=True,
@@ -1319,11 +1059,7 @@ def render_correction():
             )
             chart_card_close()
         with chart_col2:
-            chart_card_open("Taux d'elements OK", "speed")
-            st.plotly_chart(make_gauge(ok_rate, height=230), use_container_width=True, config={"displayModeBar": False})
-            chart_card_close()
-        with chart_col3:
-            chart_card_open("Statuts par feuille", "stacked_bar_chart")
+            chart_card_open("Statuts par feuille")
             per_sheet_status = (
                 result.results_df.groupby(["Feuille", "Statut"]).size().unstack(fill_value=0)
             )
@@ -1336,13 +1072,7 @@ def render_correction():
                 st.plotly_chart(make_grouped_bar_chart(sheets, series, height=230), use_container_width=True, config={"displayModeBar": False})
             chart_card_close()
 
-        scatter_fig = make_delta_scatter(result.results_df, height=280)
-        if scatter_fig is not None:
-            chart_card_open("Delta predit en fonction de la longueur d'origine", "scatter_plot")
-            st.plotly_chart(scatter_fig, use_container_width=True, config={"displayModeBar": False})
-            chart_card_close()
-
-        section_title("Tableau de controle", "table_view")
+        st.subheader("Tableau de controle")
         st.caption(
             "Les deux methodes de calcul de la nouvelle longueur sont affichees cote a cote : "
             "la version arrondie au pas metier (utilisee par defaut) et la version basee sur le "
@@ -1354,7 +1084,7 @@ def render_correction():
             display_df = display_df[display_df["Statut"] != "OK"]
         st.dataframe(_display_results_df(display_df), use_container_width=True, hide_index=True)
 
-        section_title("Validation", "task_alt")
+        st.subheader("Validation")
         st.session_state.validated = st.checkbox(
             "Je valide ce tableau de controle et souhaite conserver ce calcul",
             value=st.session_state.validated,
@@ -1366,18 +1096,12 @@ def render_correction():
             summary = build_change_summary(result.results_df)
             s = summary["stats"]
 
-            section_title("Resume des modifications", "difference")
-            st.markdown(
-                f"""
-                <div class="kpi-row">
-                    {kpi_card_html("Elements modifies", s["n_modified"], "edit")}
-                    {kpi_card_html("Longueurs augmentees", s["n_increased"], "trending_up", "warn")}
-                    {kpi_card_html("Longueurs diminuees", s["n_decreased"], "trending_down")}
-                    {kpi_card_html("Ecart moyen (mm)", s["mean_delta_abs"], "swap_vert", "ok")}
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+            st.subheader("Resume des modifications")
+            sum_col1, sum_col2, sum_col3, sum_col4 = st.columns(4)
+            sum_col1.metric("Elements modifies", s["n_modified"])
+            sum_col2.metric("Longueurs augmentees", s["n_increased"])
+            sum_col3.metric("Longueurs diminuees", s["n_decreased"])
+            sum_col4.metric("Ecart moyen (mm)", s["mean_delta_abs"])
             st.caption(
                 f"Inchanges : {s['n_unchanged']} - "
                 f"Plus grande augmentation : {s['max_increase']:+} mm - "
@@ -1386,7 +1110,7 @@ def render_correction():
 
             chg_col1, chg_col2 = st.columns([1, 1.6])
             with chg_col1:
-                chart_card_open("Repartition des modifications", "donut_small")
+                chart_card_open("Repartition des modifications")
                 st.plotly_chart(
                     _modification_donut(s),
                     use_container_width=True,
@@ -1394,7 +1118,7 @@ def render_correction():
                 )
                 chart_card_close()
             with chg_col2:
-                chart_card_open("Distribution des deltas arrondis (mm)", "bar_chart")
+                chart_card_open("Distribution des deltas arrondis (mm)")
                 delta_values = result.results_df["Delta arrondi (mm)"].dropna().tolist()
                 if delta_values:
                     st.plotly_chart(make_histogram(delta_values, color=CHART_COLORS["primary_light"], height=230), use_container_width=True, config={"displayModeBar": False})
@@ -1416,19 +1140,15 @@ def render_correction():
             )
             ec1, ec2 = st.columns(2)
             with ec1:
-                if st.button("Aller aux exportations", type="primary", icon=":material/file_download:"):
+                if st.button("📤 Aller aux exportations", type="primary"):
                     st.session_state.page = "exportations"
                     st.rerun()
             with ec2:
-                if st.button("Voir l'historique", icon=":material/history:"):
+                if st.button("🕒 Voir l'historique"):
                     st.session_state.page = "historique"
                     st.rerun()
     else:
-        empty_state(
-            "upload_file",
-            "Aucun fichier calcule",
-            "Importez un fichier UCS (.xlsx) puis cliquez sur « Calculer » pour demarrer.",
-        )
+        st.info("Importez un fichier UCS (.xlsx) puis cliquez sur « Calculer » pour demarrer.")
 
 
 def _modification_donut(stats, height=230):
@@ -1475,25 +1195,14 @@ def render_rules():
     )
 
     if rules_are_custom():
-        st.markdown(f'<span class="tag-pill custom">{mi("tune")} Regles personnalisees actives</span>', unsafe_allow_html=True)
+        st.markdown('<span class="tag-pill custom">🟠 Regles personnalisees actives</span>', unsafe_allow_html=True)
     else:
-        st.markdown(f'<span class="tag-pill">{mi("verified")} Valeurs par defaut du cahier des charges</span>', unsafe_allow_html=True)
+        st.markdown('<span class="tag-pill">🟢 Valeurs par defaut du cahier des charges</span>', unsafe_allow_html=True)
 
     r = st.session_state.rules
 
-    # Apercu visuel des regles actuellement sauvegardees
-    section_title("Apercu de la courbe du modele", "show_chart")
-    range_col1, range_col2 = st.columns(2)
-    with range_col1:
-        l_min = st.number_input("Longueur min (mm)", min_value=1, value=50, step=10)
-    with range_col2:
-        l_max = st.number_input("Longueur max (mm)", min_value=10, value=3000, step=50)
-    chart_card_open("Delta continu vs delta arrondi (regles sauvegardees)", "show_chart")
-    st.plotly_chart(make_model_curve(r, float(l_min), float(l_max), height=300), use_container_width=True, config={"displayModeBar": False})
-    chart_card_close()
-
     with st.form("rules_form"):
-        section_title("Pas d'arrondi metier", "straighten")
+        st.markdown('<div class="section-title">Pas d\'arrondi metier</div>', unsafe_allow_html=True)
         rounding_step = st.number_input(
             "Pas d'arrondi (mm)",
             min_value=1,
@@ -1503,14 +1212,14 @@ def render_rules():
             help="Delta_arrondi = pas x round(Delta / pas)",
         )
 
-        section_title("Composante logarithmique", "function")
+        st.markdown('<div class="section-title">Composante logarithmique</div>', unsafe_allow_html=True)
         lc1, lc2 = st.columns(2)
         with lc1:
             log_a = st.number_input("Coefficient a (Delta = a.ln(L) + b + ...)", value=float(r["log_a"]), format="%.6f")
         with lc2:
             log_b = st.number_input("Coefficient b", value=float(r["log_b"]), format="%.6f")
 
-        section_title("Corrections gaussiennes (a_i, C_i, sigma_i)", "ssid_chart")
+        st.markdown('<div class="section-title">Corrections gaussiennes (a_i, C_i, sigma_i)</div>', unsafe_allow_html=True)
         gaussian_df = pd.DataFrame(r["gaussian_params"], columns=["a_i", "C_i", "sigma_i"])
         edited_gaussian_df = st.data_editor(
             gaussian_df,
@@ -1520,8 +1229,8 @@ def render_rules():
         )
 
         col_save, col_reset = st.columns([1, 1])
-        submitted = col_save.form_submit_button("Sauvegarder et appliquer", type="primary", use_container_width=True, icon=":material/save:")
-        reset = col_reset.form_submit_button("Reinitialiser aux valeurs par defaut", use_container_width=True, icon=":material/restart_alt:")
+        submitted = col_save.form_submit_button("💾 Sauvegarder et appliquer", type="primary", use_container_width=True)
+        reset = col_reset.form_submit_button("↩️ Reinitialiser aux valeurs par defaut", use_container_width=True)
 
     if submitted:
         st.session_state.rules = {
@@ -1543,7 +1252,7 @@ def render_rules():
         st.success("Regles reinitialisees aux valeurs par defaut du cahier des charges.")
         st.rerun()
 
-    section_title("Formule appliquee", "calculate")
+    st.markdown('<div class="section-title">Formule appliquee</div>', unsafe_allow_html=True)
     st.markdown(
         f"""<div class="formula-box">
         Delta(L) = {r['log_a']} . ln(L) + {r['log_b']}
@@ -1569,8 +1278,8 @@ def render_historique():
 
     historique = st.session_state.historique
     if not historique:
-        empty_state("history", "Historique vide", "Aucun calcul valide pour l'instant dans cette session.")
-        if st.button("Aller a « Correction des longueurs »", type="primary", icon=":material/straighten:"):
+        st.warning("Aucun calcul valide pour l'instant dans cette session.")
+        if st.button("📐 Aller a « Correction des longueurs »", type="primary"):
             st.session_state.page = "correction"
             st.rerun()
         return
@@ -1579,30 +1288,17 @@ def render_historique():
     with top_col1:
         st.caption(f"{len(historique)} calcul(s) enregistre(s) dans cette session.")
     with top_col2:
-        if st.button("Vider l'historique", use_container_width=True, icon=":material/delete:"):
+        if st.button("🗑️ Vider l'historique", use_container_width=True):
             st.session_state.historique = []
             st.session_state.selected_history_id = None
             st.rerun()
-
-    total_el = sum(h["n_total"] for h in historique)
-    st.markdown(
-        f"""
-        <div class="kpi-row">
-            {kpi_card_html("Calculs", len(historique), "calculate")}
-            {kpi_card_html("Elements", total_el, "cable", "ok")}
-            {kpi_card_html("Avertissements", sum(h["n_warnings"] for h in historique), "warning", "warn")}
-            {kpi_card_html("Erreurs", sum(h["n_errors"] for h in historique), "error", "err")}
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
 
     if len(historique) > 1:
         chronological = list(reversed(historique))
         labels = [f'{h["timestamp"][5:16]}' for h in chronological]
         chart_col1, chart_col2 = st.columns([1.6, 1])
         with chart_col1:
-            chart_card_open("Evolution des avertissements / erreurs par calcul", "trending_up")
+            chart_card_open("Evolution des avertissements / erreurs par calcul")
             st.plotly_chart(
                 make_trend_chart(
                     labels,
@@ -1617,7 +1313,7 @@ def render_historique():
             )
             chart_card_close()
         with chart_col2:
-            chart_card_open("Repartition cumulee", "donut_large")
+            chart_card_open("Repartition cumulee")
             st.plotly_chart(
                 make_status_donut(
                     sum(h["n_ok"] for h in historique),
@@ -1647,7 +1343,7 @@ def render_historique():
     )
     st.dataframe(table, use_container_width=True, hide_index=True)
 
-    section_title("Detail d'un calcul", "manage_search")
+    st.markdown('<div class="section-title">Detail d\'un calcul</div>', unsafe_allow_html=True)
     options = {f'{h["timestamp"]} — {h["filename"]}': h["id"] for h in historique}
     label = st.selectbox("Choisir un calcul", list(options.keys()))
     entry = get_history_entry(options[label])
@@ -1665,12 +1361,12 @@ def render_historique():
 
         rc1, rc2 = st.columns(2)
         with rc1:
-            if st.button("Ouvrir dans Rapports", use_container_width=True, icon=":material/fact_check:"):
+            if st.button("📋 Ouvrir dans Rapports", use_container_width=True):
                 st.session_state.selected_history_id = entry["id"]
                 st.session_state.page = "rapports"
                 st.rerun()
         with rc2:
-            if st.button("Exporter ce calcul", use_container_width=True, icon=":material/file_download:"):
+            if st.button("📤 Exporter ce calcul", use_container_width=True):
                 st.session_state.selected_history_id = entry["id"]
                 st.session_state.page = "exportations"
                 st.rerun()
@@ -1685,8 +1381,8 @@ def render_rapports():
 
     historique = st.session_state.historique
     if not historique:
-        empty_state("fact_check", "Aucun rapport disponible", "Effectuez d'abord un calcul valide.")
-        if st.button("Aller a « Correction des longueurs »", type="primary", icon=":material/straighten:"):
+        st.warning("Aucun rapport disponible : effectuez d'abord un calcul valide.")
+        if st.button("📐 Aller a « Correction des longueurs »", type="primary"):
             st.session_state.page = "correction"
             st.rerun()
         return
@@ -1698,14 +1394,14 @@ def render_rapports():
     entry = get_history_entry(options[label])
     st.session_state.selected_history_id = entry["id"]
 
-    section_title("Synthese", "summarize")
+    st.markdown('<div class="section-title">Synthese</div>', unsafe_allow_html=True)
     st.markdown(
         f"""
         <div class="kpi-row">
-            {kpi_card_html("Fichier source", entry['filename'], "description", "", "font-size:1.05rem;")}
-            {kpi_card_html("OK", entry['n_ok'], "check_circle", "ok")}
-            {kpi_card_html("Avertissements", entry['n_warnings'], "warning", "warn")}
-            {kpi_card_html("Erreurs", entry['n_errors'], "error", "err")}
+            <div class="kpi-card"><div class="kpi-label">Fichier source</div><div class="kpi-value" style="font-size:1.1rem;">{entry['filename']}</div></div>
+            <div class="kpi-card ok"><div class="kpi-label">OK</div><div class="kpi-value">{entry['n_ok']}</div></div>
+            <div class="kpi-card warn"><div class="kpi-label">Avertissements</div><div class="kpi-value">{entry['n_warnings']}</div></div>
+            <div class="kpi-card err"><div class="kpi-label">Erreurs</div><div class="kpi-value">{entry['n_errors']}</div></div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -1719,24 +1415,19 @@ def render_rapports():
         st.warning(f"Feuilles ignorees lors de ce calcul : {', '.join(entry['skipped_sheets'])}")
 
     df = entry["results_df"]
-    ok_rate = round(100 * entry["n_ok"] / entry["n_total"], 1) if entry["n_total"] else 0
 
-    section_title("Repartition des statuts", "donut_large")
-    donut_col, gauge_col, hist_col = st.columns([1, 1, 1.4])
+    st.markdown('<div class="section-title">Repartition des statuts</div>', unsafe_allow_html=True)
+    donut_col, hist_col = st.columns([1, 1.4])
     with donut_col:
-        chart_card_open("Statuts", "donut_large")
+        chart_card_open("Statuts")
         st.plotly_chart(
             make_status_donut(entry["n_ok"], entry["n_warnings"], entry["n_errors"], height=250),
             use_container_width=True,
             config={"displayModeBar": False},
         )
         chart_card_close()
-    with gauge_col:
-        chart_card_open("Taux d'elements OK", "speed")
-        st.plotly_chart(make_gauge(ok_rate, height=250), use_container_width=True, config={"displayModeBar": False})
-        chart_card_close()
     with hist_col:
-        chart_card_open("Distribution des deltas arrondis (mm)", "bar_chart")
+        chart_card_open("Distribution des deltas arrondis (mm)")
         delta_values = df["Delta arrondi (mm)"].dropna().tolist()
         if delta_values:
             st.plotly_chart(make_histogram(delta_values, color=CHART_COLORS["primary_light"], height=250), use_container_width=True, config={"displayModeBar": False})
@@ -1744,34 +1435,22 @@ def render_rapports():
             st.info("Aucune valeur de delta disponible pour ce calcul.")
         chart_card_close()
 
-    scatter_fig = make_delta_scatter(df, height=260)
-    if scatter_fig is not None:
-        chart_card_open("Delta predit en fonction de la longueur d'origine", "scatter_plot")
-        st.plotly_chart(scatter_fig, use_container_width=True, config={"displayModeBar": False})
-        chart_card_close()
-
-    section_title("Resume des modifications", "difference")
+    st.markdown('<div class="section-title">Resume des modifications</div>', unsafe_allow_html=True)
     summary = build_change_summary(df)
     s = summary["stats"]
-    st.markdown(
-        f"""
-        <div class="kpi-row">
-            {kpi_card_html("Elements modifies", s["n_modified"], "edit")}
-            {kpi_card_html("Longueurs augmentees", s["n_increased"], "trending_up", "warn")}
-            {kpi_card_html("Longueurs diminuees", s["n_decreased"], "trending_down")}
-            {kpi_card_html("Ecart moyen (mm)", s["mean_delta_abs"], "swap_vert", "ok")}
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    sum_col1, sum_col2, sum_col3, sum_col4 = st.columns(4)
+    sum_col1.metric("Elements modifies", s["n_modified"])
+    sum_col2.metric("Longueurs augmentees", s["n_increased"])
+    sum_col3.metric("Longueurs diminuees", s["n_decreased"])
+    sum_col4.metric("Ecart moyen (mm)", s["mean_delta_abs"])
 
     mod_col1, mod_col2 = st.columns([1, 1.4])
     with mod_col1:
-        chart_card_open("Augmentees / diminuees / inchangees", "donut_small")
+        chart_card_open("Augmentees / diminuees / inchangees")
         st.plotly_chart(_modification_donut(s, height=230), use_container_width=True, config={"displayModeBar": False})
         chart_card_close()
     with mod_col2:
-        chart_card_open("Elements par feuille et par statut", "stacked_bar_chart")
+        chart_card_open("Elements par feuille et par statut")
         per_sheet_status = df.groupby(["Feuille", "Statut"]).size().unstack(fill_value=0)
         sheets = list(per_sheet_status.index)
         series = {}
@@ -1785,12 +1464,12 @@ def render_rapports():
     with st.expander("Repartition par feuille"):
         st.dataframe(summary["per_sheet"], use_container_width=True, hide_index=True)
 
-    section_title("Tableau de controle complet", "table_view")
+    st.markdown('<div class="section-title">Tableau de controle complet</div>', unsafe_allow_html=True)
     show_issues_only = st.checkbox("Afficher uniquement les avertissements / erreurs", key="rapport_issues_only")
     display_df = df if not show_issues_only else df[df["Statut"] != "OK"]
     st.dataframe(_display_results_df(display_df), use_container_width=True, hide_index=True)
 
-    if st.button("Exporter ce rapport", type="primary", icon=":material/file_download:"):
+    if st.button("📤 Exporter ce rapport", type="primary"):
         st.session_state.selected_history_id = entry["id"]
         st.session_state.page = "exportations"
         st.rerun()
@@ -1805,8 +1484,8 @@ def render_exportations():
 
     historique = st.session_state.historique
     if not historique:
-        empty_state("file_download", "Rien a exporter", "Effectuez d'abord un calcul valide.")
-        if st.button("Aller a « Correction des longueurs »", type="primary", icon=":material/straighten:"):
+        st.warning("Aucun calcul disponible a exporter : effectuez d'abord un calcul valide.")
+        if st.button("📐 Aller a « Correction des longueurs »", type="primary"):
             st.session_state.page = "correction"
             st.rerun()
         return
@@ -1820,11 +1499,11 @@ def render_exportations():
     base_name = entry["filename"].rsplit(".", 1)[0] if entry["filename"] else "ucs"
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    section_title("Fichiers disponibles", "folder_open")
+    st.markdown('<div class="section-title">Fichiers disponibles</div>', unsafe_allow_html=True)
     export_col1, export_col2, export_col3 = st.columns(3)
 
     with export_col1:
-        st.markdown(f"{mi('table_view')} **UCS corrige**", unsafe_allow_html=True)
+        st.markdown("**UCS corrige**")
         st.caption("Copie du fichier source avec les nouvelles longueurs (fichier d'origine jamais modifie).")
 
         length_choice_label = st.radio(
@@ -1851,52 +1530,48 @@ def render_exportations():
                 length_column=selected_length_column,
             )
             st.download_button(
-                f"Telecharger UCS corrige — {suffix} (.xlsx)",
+                f"⬇️ Telecharger UCS corrige — {suffix} (.xlsx)",
                 data=corrected_ucs_bytes,
                 file_name=f"{base_name}_corrected_{suffix}_{timestamp}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True,
-                icon=":material/download:",
             )
         else:
             st.caption("Fichier source non disponible pour ce calcul.")
 
     with export_col2:
-        st.markdown(f"{mi('fact_check')} **Rapport de calcul**", unsafe_allow_html=True)
+        st.markdown("**Rapport de calcul**")
         st.caption("Tableau de controle complet (deltas arrondi et continu inclus), au format tableur.")
         report_xlsx = export_report_excel(entry["results_df"])
         st.download_button(
-            "Rapport (.xlsx)",
+            "⬇️ Rapport (.xlsx)",
             data=report_xlsx,
             file_name=f"{base_name}_rapport_{timestamp}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True,
-            icon=":material/download:",
         )
         report_csv = export_report_csv(entry["results_df"])
         st.download_button(
-            "Rapport (.csv)",
+            "⬇️ Rapport (.csv)",
             data=report_csv,
             file_name=f"{base_name}_rapport_{timestamp}.csv",
             mime="text/csv",
             use_container_width=True,
-            icon=":material/download:",
         )
 
     with export_col3:
-        st.markdown(f"{mi('description')} **Demande d'ajustement**", unsafe_allow_html=True)
+        st.markdown("**Demande d'ajustement**")
         project_name = st.text_input("Nom du projet / faisceau", value=base_name, key="export_project_name")
         letter_bytes = generate_adjustment_letter(entry["results_df"], project_name=project_name)
         st.download_button(
-            "Demande d'ajustement (.docx)",
+            "⬇️ Demande d'ajustement (.docx)",
             data=letter_bytes,
             file_name=f"{base_name}_demande_ajustement_{timestamp}.docx",
             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             use_container_width=True,
-            icon=":material/download:",
         )
 
-    section_title("Recapitulatif du calcul selectionne", "receipt_long")
+    st.markdown('<div class="section-title">Recapitulatif du calcul selectionne</div>', unsafe_allow_html=True)
     st.markdown(
         f"""
         <div class="info-card">
@@ -1914,8 +1589,6 @@ def render_exportations():
 # Dispatch
 # --------------------------------------------------------------------------
 
-render_app_header()
-
 if st.session_state.page == "home":
     render_home()
 else:
@@ -1929,5 +1602,3 @@ else:
         "exportations": render_exportations,
     }
     dispatch.get(st.session_state.page, render_dashboard)()
-
-render_footer()
