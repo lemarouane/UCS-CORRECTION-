@@ -57,7 +57,7 @@ st.set_page_config(page_title="Wire Correct", page_icon="🔧", layout="wide")
 
 LOGO_APP = "logos/wire_correct.png"   # <-- nouveau logo (centre en haut de page)
 LOGO_FST = "logos/fst.png"
-LOGO_LEAR = "logos/lear.png"
+LOGO_LEAR = "logos/lear_logo.png"
 
 APP_NAME = "WIRE CORRECT"
 APP_TAGLINE = "Automatisation des corrections de longueur UCS"
