@@ -794,17 +794,7 @@ def render_app_header():
         logo_html = f'<img class="app-logo" src="data:image/png;base64,{_image_to_base64(LOGO_APP)}">'
     else:
         logo_html = FALLBACK_LOGO_SVG
-    st.markdown(
-        f"""
-        <div class="app-header">
-            {logo_html}
-            <div class="app-name">{APP_NAME}</div>
-            <div class="app-name-bar"></div>
-            <div class="app-sub">{APP_TAGLINE}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+
 
 
 def render_footer():
