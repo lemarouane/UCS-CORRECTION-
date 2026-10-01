@@ -167,21 +167,50 @@ section[data-testid="stSidebar"] div[data-testid="stButton"] {
 section[data-testid="stSidebar"] div[data-testid="stButton"] button {
     background: transparent;
     border: 1px solid transparent;
-    text-align: left;
-    justify-content: flex-start;
-    align-items: center;
     color: #cbd5e1;
     font-weight: 500;
     font-size: 0.87rem;
     line-height: 1.2;
-    padding: 0.55rem 0.7rem;
+    padding: 0.55rem 0.8rem;
     border-radius: 9px;
     width: 100%;
     min-height: 2.5rem;
+    display: flex !important;
+    justify-content: flex-start !important;
+    align-items: center !important;
+    text-align: left !important;
+}
+/* ---- Alignement des icones : colonne d'icone de largeur fixe + texte aligne a gauche ---- */
+section[data-testid="stSidebar"] div[data-testid="stButton"] button > div {
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: flex-start !important;
+    align-items: center !important;
+    gap: 0.75rem !important;
+    width: 100% !important;
+    margin: 0 !important;
+}
+section[data-testid="stSidebar"] div[data-testid="stButton"] button span[data-testid="stIconMaterial"],
+section[data-testid="stSidebar"] div[data-testid="stButton"] button [data-testid="stIconMaterial"] {
+    flex: 0 0 1.5rem !important;
+    width: 1.5rem !important;
+    min-width: 1.5rem !important;
+    margin: 0 !important;
+    font-size: 1.3rem !important;
+    text-align: center !important;
+    display: inline-flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+}
+section[data-testid="stSidebar"] div[data-testid="stButton"] button [data-testid="stMarkdownContainer"] {
+    flex: 1 1 auto !important;
+    text-align: left !important;
+    margin: 0 !important;
 }
 section[data-testid="stSidebar"] div[data-testid="stButton"] button p {
-    margin: 0;
+    margin: 0 !important;
     font-size: 0.87rem;
+    text-align: left !important;
 }
 section[data-testid="stSidebar"] div[data-testid="stButton"] button:hover {
     background: rgba(255,255,255,0.08);
